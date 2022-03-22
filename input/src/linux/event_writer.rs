@@ -176,17 +176,21 @@ impl EventWriter {
 
     pub async fn write(&mut self, event: Event) -> Result<(), Error> {
         match event {
-            Event::MouseScroll { delta } => self.mouse.write(Event::MouseScroll { delta }).await,
+            Event::MouseScroll { delta } => {
+                self.mouse.write(Event::MouseScroll { delta }).await
+            },
             Event::MouseMove { axis, delta } => {
                 self.mouse.write(Event::MouseMove { axis, delta }).await
             }
             Event::Key { direction, kind } => match kind {
-                KeyKind::Button(Button::Left)
+                  KeyKind::Button(Button::Left)
                 | KeyKind::Button(Button::Right)
                 | KeyKind::Button(Button::Middle) => {
                     self.mouse.write(Event::Key { direction, kind }).await
+                },
+                _ => {
+                    self.keyboard.write(Event::Key { direction, kind }).await
                 }
-                _ => self.keyboard.write(Event::Key { direction, kind }).await,
             },
         }
     }
