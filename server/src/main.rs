@@ -110,6 +110,10 @@ async fn run(
                 }
             };
 
+            if let Err(err) = stream.set_nodelay(true) {
+                log::warn!("{}: setting TCP_NODELAY failed: {}", address, err);
+            };
+
             let stream = match acceptor.accept(stream).await {
                 Ok(stream) => stream,
                 Err(err) => {

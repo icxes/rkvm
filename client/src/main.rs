@@ -30,6 +30,9 @@ async fn run(server: &str, port: u16, certificate_path: &Path) -> Result<Infalli
         .into();
 
     let stream = TcpStream::connect((server, port)).await?;
+    if let Err(err) = stream.set_nodelay(true) {
+        log::warn!("setting TCP_NODELAY failed: {}", err);
+    };
     let stream = BufReader::new(stream);
     let mut stream = connector
         .connect(server, stream)
