@@ -124,7 +124,7 @@ struct Mouse {
 }
 
 const MOUSE_EVENT_TYPES: &[(u32, &[RangeInclusive<u32>])] = &[
-    (glue::EV_SYN, &[glue::SYN_REPORT..=glue::SYN_REPORT]),
+    (glue::EV_SYN, &[glue::SYN_REPORT..=glue::SYN_MAX]),
     (glue::EV_REL, &[0..=glue::REL_MAX]),
     (glue::EV_KEY, &[glue::BTN_LEFT..=glue::BTN_GEAR_UP]),
 ];
@@ -146,7 +146,7 @@ struct Keyboard {
 }
 
 const KEYBOARD_EVENT_TYPES: &[(u32, &[RangeInclusive<u32>])] = &[
-    (glue::EV_SYN, &[glue::SYN_REPORT..=glue::SYN_REPORT]),
+    (glue::EV_SYN, &[glue::SYN_REPORT..=glue::SYN_MAX]),
     (glue::EV_KEY, &[0..=glue::KEY_MICMUTE]),
 ];
 
