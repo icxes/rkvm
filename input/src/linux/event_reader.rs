@@ -63,6 +63,8 @@ impl EventReader {
             glue::libevdev_set_id_version(evdev, device_id::VERSION as _);
         }
 
+        log::debug!("grabbing({})", path.to_string_lossy());
+
         let ret = unsafe { glue::libevdev_grab(evdev, glue::libevdev_grab_mode_LIBEVDEV_GRAB) };
         if ret < 0 {
             unsafe {
@@ -123,6 +125,8 @@ impl EventReader {
             if let Some(event) = Event::from_raw(event) {
                 return Ok(event);
             }
+
+            log::trace!("not understood, putting back: type={} code={} value={}", event.type_, event.code, event.value);
 
             // Not understood, write it back.
             let ret = unsafe {

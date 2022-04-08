@@ -3,7 +3,6 @@ mod config;
 use anyhow::{Context, Error};
 use config::Config;
 use input::{Direction, Event, EventManager, Key, KeyKind};
-use log::LevelFilter;
 use net::{self, Message, PROTOCOL_VERSION};
 use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
@@ -228,7 +227,6 @@ struct Args {
 async fn main() {
     env_logger::builder()
         .format_timestamp(None)
-        .filter(None, LevelFilter::Info)
         .init();
 
     let args = Args::from_args();

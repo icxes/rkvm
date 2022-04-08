@@ -6,7 +6,6 @@ use crate::linux::glue::{self, input_event, libevdev, libevdev_uinput};
 use std::io::{Error, ErrorKind};
 use std::mem::MaybeUninit;
 use std::ops::RangeInclusive;
-use log::LevelFilter;
 
 #[derive(Debug)]
 enum DevType {
@@ -20,17 +19,17 @@ struct Device {
 }
 
 impl Device {
-    pub async fn new(event_types: &'static [(u32, &[RangeInclusive<u32>])]) -> Result<Self, Error> {
-        tokio::task::spawn_blocking(move || Self::new_sync(event_types)).await?
+    pub async fn new(event_types: &'static [(u32, &[RangeInclusive<u32>])], dev_type: DevType) -> Result<Self, Error> {
+        tokio::task::spawn_blocking(move || Self::new_sync(event_types, dev_type)).await?
     }
 
-    fn new_sync(event_types: &'static [(u32, &[RangeInclusive<u32>])]) -> Result<Self, Error> {
+    fn new_sync(event_types: &'static [(u32, &[RangeInclusive<u32>])], dev_type: DevType) -> Result<Self, Error> {
         let evdev = unsafe { glue::libevdev_new() };
         if evdev.is_null() {
             return Err(Error::new(ErrorKind::Other, "Failed to create device"));
         }
 
-        if let Err(err) = unsafe { setup_evdev(evdev, event_types) } {
+        if let Err(err) = unsafe { setup_evdev(evdev, event_types, dev_type) } {
             unsafe {
                 glue::libevdev_free(evdev);
             }
@@ -88,11 +87,19 @@ impl Device {
     }
 }
 
+fn get_dev_name(dev_type: DevType) -> &'static [u8] {
+    match dev_type {
+        DevType::Mouse    => b"rkvm-mouse\0",
+        DevType::Keyboard => b"rkvm-keyboard\0",
+    }
+}
+
 unsafe fn setup_evdev(
     evdev: *mut libevdev,
     event_types: &'static [(u32, &[RangeInclusive<u32>])],
+    dev_type: DevType,
 ) -> Result<(), Error> {
-    glue::libevdev_set_name(evdev, b"rkvm\0".as_ptr() as *const _);
+    glue::libevdev_set_name(evdev, get_dev_name(dev_type).as_ptr() as *const _);
     glue::libevdev_set_id_vendor(evdev, device_id::VENDOR as _);
     glue::libevdev_set_id_product(evdev, device_id::PRODUCT as _);
     glue::libevdev_set_id_version(evdev, device_id::VERSION as _);
@@ -138,7 +145,7 @@ const MOUSE_EVENT_TYPES: &[(u32, &[RangeInclusive<u32>])] = &[
 
 impl Mouse {
     pub async fn new() -> Result<Self, Error> {
-        let device = Device::new(MOUSE_EVENT_TYPES).await?;
+        let device = Device::new(MOUSE_EVENT_TYPES, DevType::Mouse).await?;
         Ok(Self { device })
     }
 
@@ -159,7 +166,7 @@ const KEYBOARD_EVENT_TYPES: &[(u32, &[RangeInclusive<u32>])] = &[
 
 impl Keyboard {
     pub async fn new() -> Result<Self, Error> {
-        let device = Device::new(KEYBOARD_EVENT_TYPES).await?;
+        let device = Device::new(KEYBOARD_EVENT_TYPES, DevType::Keyboard).await?;
         Ok(Self { device })
     }
 
@@ -182,23 +189,25 @@ impl EventWriter {
     }
 
     pub async fn write(&mut self, event: Event) -> Result<(), Error> {
-        match event {
-            Event::MouseScroll { delta, scroll } => {
-                self.mouse.write(event).await
-            },
-            Event::MouseMove { axis, delta } => {
-                self.mouse.write(event).await
-            }
-            Event::Key { direction, kind } => match kind {
+        let dev_type = match event {
+            Event::MouseScroll { delta:_, scroll:_ } => DevType::Mouse,
+            Event::MouseMove { axis:_, delta:_ }     => DevType::Mouse,
+            Event::Key { direction:_, kind } => match kind {
                   KeyKind::Button(Button::Left)
                 | KeyKind::Button(Button::Right)
-                | KeyKind::Button(Button::Middle) => {
-                    self.mouse.write(Event::Key { direction, kind }).await
-                },
-                _ => {
-                    self.keyboard.write(Event::Key { direction, kind }).await
-                }
+                | KeyKind::Button(Button::Middle) => DevType::Mouse,
+                  _                               => DevType::Keyboard,
             },
+        };
+        match dev_type {
+            DevType::Mouse => {
+                log::trace!("mouse <= {:?}", event);
+                self.mouse.write(event).await
+            },
+            DevType::Keyboard => {
+                log::trace!("mouse <= {:?}", event);
+                self.keyboard.write(event).await
+            }
         }
     }
 }
