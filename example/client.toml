@@ -1,2 +1,3 @@
-server = "localhost:5258"
+[myserver]
+server-address = "localhost:5258"
 certificate-path = "certificate.pem"
