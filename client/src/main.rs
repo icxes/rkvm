@@ -1,12 +1,12 @@
 mod config;
 
 use anyhow::{Context, Error};
-use config::Config;
+use config::{Config, Server};
 use input::EventWriter;
 use log::LevelFilter;
 use net::{self, Message, PROTOCOL_VERSION};
 use std::convert::Infallible;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process;
 use structopt::StructOpt;
 use tokio::fs;
@@ -14,14 +14,36 @@ use tokio::io::BufReader;
 use tokio::net::TcpStream;
 use tokio::time;
 use tokio_native_tls::native_tls::{Certificate, TlsConnector};
+use futures::{future::select_all, FutureExt};
 
-async fn run(server: &str, port: u16, certificate_path: &Path) -> Result<Infallible, Error> {
-    let certificate = fs::read(certificate_path)
-        .await
+async fn try_connect(name: String, server: Server) -> Result<(String, Server, Certificate, TcpStream), Error> {
+    let certificate = fs::read(&server.certificate_path).await
         .context("Failed to read certificate")?;
+
     let certificate = Certificate::from_der(&certificate)
         .or_else(|_| Certificate::from_pem(&certificate))
         .context("Failed to parse certificate")?;
+
+    let (host, port) = (&server.server_address.host, server.server_address.port);
+
+    log::info!("Attempting connection to {} ({}:{})", name, host, port);
+    let stream = TcpStream::connect((host.as_str(), port)).await?;
+
+    Ok((name, server, certificate, stream))
+}
+
+async fn run(mut config: Config) -> Result<Infallible, Error> {
+    let (name, server, certificate, stream) = {
+        let (res, _num, _vec) = select_all(config.drain().map(|(name, srv)| {
+            try_connect(name.to_string(), srv).boxed()
+        })).await;
+        res?
+    };
+
+    let (host, port) = (&server.server_address.host, server.server_address.port);
+
+    log::debug!("Connection open to {} ({}:{}), setting up TLS: {} ", name, host, port,
+        server.certificate_path.to_string_lossy());
 
     let connector: tokio_native_tls::TlsConnector = TlsConnector::builder()
         .add_root_certificate(certificate)
@@ -29,17 +51,17 @@ async fn run(server: &str, port: u16, certificate_path: &Path) -> Result<Infalli
         .context("Failed to create connector")?
         .into();
 
-    let stream = TcpStream::connect((server, port)).await?;
     if let Err(err) = stream.set_nodelay(true) {
         log::warn!("setting TCP_NODELAY failed: {}", err);
     };
+
     let stream = BufReader::new(stream);
     let mut stream = connector
-        .connect(server, stream)
+        .connect(&server.server_address.host, stream)
         .await
         .context("Failed to connect")?;
 
-    log::info!("Connected to {}:{}", server, port);
+    log::info!("Connected to {} ({}:{})", name, host, port);
 
     net::write_version(&mut stream, PROTOCOL_VERSION).await?;
 
@@ -104,7 +126,7 @@ async fn main() {
     };
 
     tokio::select! {
-        result = run(&config.server.hostname, config.server.port, &config.certificate_path) => {
+        result = run(config.clone()) => {
             if let Err(err) = result {
                 log::error!("Error: {:#}", err);
                 process::exit(1);
