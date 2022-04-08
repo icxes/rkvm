@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum Event {
-    MouseScroll { delta: i32 },
+    MouseScroll { delta: i32, scroll: Scroll },
     MouseMove { axis: Axis, delta: i32 },
     Key { direction: Direction, kind: KeyKind },
 }
@@ -17,6 +17,13 @@ pub enum Event {
 pub enum Axis {
     X,
     Y,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub enum Scroll {
+    Lo,
+    HiRes,
+    HiResH,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq)]

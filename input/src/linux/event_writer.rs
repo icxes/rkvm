@@ -6,6 +6,13 @@ use crate::linux::glue::{self, input_event, libevdev, libevdev_uinput};
 use std::io::{Error, ErrorKind};
 use std::mem::MaybeUninit;
 use std::ops::RangeInclusive;
+use log::LevelFilter;
+
+#[derive(Debug)]
+enum DevType {
+    Keyboard,
+    Mouse
+}
 
 struct Device {
     evdev: *mut libevdev,
@@ -176,22 +183,19 @@ impl EventWriter {
 
     pub async fn write(&mut self, event: Event) -> Result<(), Error> {
         match event {
-            Event::MouseScroll { delta } => {
-                log::trace!("write scroll {}", delta);
-                self.mouse.write(Event::MouseScroll { delta }).await
+            Event::MouseScroll { delta, scroll } => {
+                self.mouse.write(event).await
             },
             Event::MouseMove { axis, delta } => {
-                self.mouse.write(Event::MouseMove { axis, delta }).await
+                self.mouse.write(event).await
             }
             Event::Key { direction, kind } => match kind {
                   KeyKind::Button(Button::Left)
                 | KeyKind::Button(Button::Right)
                 | KeyKind::Button(Button::Middle) => {
-                    log::trace!("write mouse btn {:?}/{:?}", direction, kind);
                     self.mouse.write(Event::Key { direction, kind }).await
                 },
                 _ => {
-                    log::trace!("write key {:?}/{:?}", direction, kind);
                     self.keyboard.write(Event::Key { direction, kind }).await
                 }
             },

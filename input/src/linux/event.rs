@@ -1,13 +1,19 @@
 mod button;
 mod key;
 
-use crate::event::{Axis, Button, Direction, Event, Key, KeyKind};
+use crate::event::{Axis, Button, Direction, Event, Key, KeyKind, Scroll};
 use crate::linux::glue::{self, input_event, timeval};
 
 impl Event {
     pub(crate) fn to_raw(&self) -> input_event {
         let (type_, code, value) = match *self {
-            Event::MouseScroll { delta } => (glue::EV_REL as _, glue::REL_WHEEL as _, delta),
+            Event::MouseScroll { delta, scroll } => {
+                match scroll {
+                    Scroll::Lo     => (glue::EV_REL as _, glue::REL_WHEEL         as _, delta),
+                    Scroll::HiRes  => (glue::EV_REL as _, glue::REL_WHEEL_HI_RES  as _, delta),
+                    Scroll::HiResH => (glue::EV_REL as _, glue::REL_HWHEEL_HI_RES as _, delta),
+                }
+            },
             Event::MouseMove {
                 axis: Axis::X,
                 delta,
@@ -39,7 +45,15 @@ impl Event {
 
     pub(crate) fn from_raw(raw: input_event) -> Option<Self> {
         let event = match (raw.type_ as _, raw.code as _, raw.value) {
-            (glue::EV_REL, glue::REL_WHEEL, value) => Event::MouseScroll { delta: value },
+            (glue::EV_REL, glue::REL_WHEEL, value) => {
+                Event::MouseScroll { delta: value, scroll: Scroll::Lo }
+            },
+            (glue::EV_REL, glue::REL_WHEEL_HI_RES, value) => {
+                Event::MouseScroll { delta: value, scroll: Scroll::HiRes }
+            },
+            (glue::EV_REL, glue::REL_HWHEEL_HI_RES, value) => {
+                Event::MouseScroll { delta: value, scroll: Scroll::HiResH }
+            },
             (glue::EV_REL, glue::REL_X, value) => Event::MouseMove {
                 axis: Axis::X,
                 delta: value,
