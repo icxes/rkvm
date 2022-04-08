@@ -126,7 +126,7 @@ impl EventReader {
                 return Ok(event);
             }
 
-            log::trace!("not understood, putting back: type={} code={} value={}", event.type_, event.code, event.value);
+            log::trace!("not understood, putting back: {}/{}/{}", event.type_, event.code, event.value);
 
             // Not understood, write it back.
             let ret = unsafe {

@@ -1,6 +1,4 @@
-use crate::event::Button;
-use crate::event::Event;
-use crate::event::KeyKind;
+use crate::event::{Event, KeyKind};
 use crate::linux::device_id;
 use crate::linux::glue::{self, input_event, libevdev, libevdev_uinput};
 use std::io::{Error, ErrorKind};
@@ -99,6 +97,7 @@ unsafe fn setup_evdev(
     event_types: &'static [(u32, &[RangeInclusive<u32>])],
     dev_type: DevType,
 ) -> Result<(), Error> {
+    log::debug!("setting up virtual device ({:?})", dev_type);
     glue::libevdev_set_name(evdev, get_dev_name(dev_type).as_ptr() as *const _);
     glue::libevdev_set_id_vendor(evdev, device_id::VENDOR as _);
     glue::libevdev_set_id_product(evdev, device_id::PRODUCT as _);
@@ -193,19 +192,17 @@ impl EventWriter {
             Event::MouseScroll { delta:_, scroll:_ } => DevType::Mouse,
             Event::MouseMove { axis:_, delta:_ }     => DevType::Mouse,
             Event::Key { direction:_, kind } => match kind {
-                  KeyKind::Button(Button::Left)
-                | KeyKind::Button(Button::Right)
-                | KeyKind::Button(Button::Middle) => DevType::Mouse,
-                  _                               => DevType::Keyboard,
+                  KeyKind::Button(_) => DevType::Mouse,
+                  _                  => DevType::Keyboard,
             },
         };
         match dev_type {
             DevType::Mouse => {
-                log::trace!("mouse <= {:?}", event);
+                log::debug!("mouse <= {:?}", event);
                 self.mouse.write(event).await
             },
             DevType::Keyboard => {
-                log::trace!("mouse <= {:?}", event);
+                log::debug!("keyboard <= {:?}", event);
                 self.keyboard.write(event).await
             }
         }
